@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+	<project basedir="." default="jars" name="tirc">
+		
+	<property name="src.dir" value="src"/>
+	<property name="compile.dir" value="classes"/>
+	<property name="bin.dir" value="bin"/>
+	<property name="jarnameClient" value="bin/clientMatou.jar"/>
+	<property name="jarnameServer" value="bin/serverMatou.jar"/>
+	<property name="javadoc.dir" value="docs"/>
+	<property name="mainclassClient" value ="fr.upem.net.tcp.main.MainClient"/>
+	<property name="mainclassServer" value ="fr.upem.net.tcp.main.MainServer"/>
+   
+	<path id="master-classpath">
+		<pathelement path="${compile.dir}"/>
+	</path>
+
+	
+	<!-- INIT -->
+	<target name="init" description="make needed directories">
+    	<mkdir dir="${compile.dir}"/>
+	</target>
+	
+	<!-- COMPILE -->
+	<target name="compile" depends="init" description="compile sources">
+		<javac destdir="${compile.dir}" source="1.8" target="1.8" failonerror="true" includeantruntime="false">
+			<src path="${src.dir}"/>
+			<classpath refid="master-classpath"/>
+		</javac>
+	</target>
+	
+	<!-- CLEAN -->
+	<target name="clean" description="clean output directories">
+	   <delete includeEmptyDirs="true">
+			<fileset dir="${compile.dir}"><include name="*/**"/></fileset>
+			<fileset dir="${bin.dir}"><include name="*/**"/></fileset>
+			<fileset dir="${javadoc.dir}" erroronmissingdir="false"><include name="*/**"/></fileset>
+	   </delete>
+	   <echo message="Clean done!" />
+	</target>
+	
+	<!-- JAR -->
+	<target name="jars" depends="compile" description="generate both executable JARS">
+		<!-- JAR Client -->
+		<jar destfile="${jarnameClient}"
+			basedir="${compile.dir}">
+			<manifest>
+				<attribute name="Class-Path" value = "."/>
+				<attribute name="Main-Class" value = "${mainclassClient}"/>
+			</manifest>
+		</jar>
+		<!-- JAR Server -->
+		<jar destfile="${jarnameServer}"
+			basedir="${compile.dir}">
+			<manifest>
+				<attribute name="Class-Path" value = "."/>
+				<attribute name="Main-Class" value = "${mainclassServer}"/>
+			</manifest>
+		</jar>
+	</target>
+	
+	<!-- JAVADOC -->
+	<target name="javadoc">
+		<javadoc sourcepath="${src.dir}" 
+			destdir="${javadoc.dir}" version="true" windowtitle="Matou javadoc">
+		</javadoc>
+		<echo message="Javadoc has been generated!" />
+	</target>
+   
+</project>
