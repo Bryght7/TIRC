@@ -18,10 +18,15 @@ import java.nio.channels.SocketChannel;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * A Client acting as a Server.
+ * 
+ * @author Cheneau and Lee
+ *
+ */
 public class ClientServer {
 	private static final Logger LOGGER = Logger.getLogger("ClientLogger");
 	private static final int MAX_THREADS = 10;
@@ -341,6 +346,7 @@ public class ClientServer {
 	 * Launch server in ready state.
 	 * 
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	public void launch() throws IOException {
 		for (int i = 0; i < MAX_THREADS; i++) {
@@ -385,7 +391,7 @@ public class ClientServer {
 	 * 
 	 * @param toNickname
 	 *            nickname of client to send message to
-	 * @param bbmsg
+	 * @param bb
 	 *            {@link ByteBuffer} containing the message
 	 * @return {@code true} if message was sent, {@code false} if client was not
 	 *         found
@@ -490,21 +496,23 @@ public class ClientServer {
 		if (opcode == (byte) 10) {
 			nicknamesFromSc.put(sc, clientNickname);
 			// increment nbAuthenticated associated with clientNickname
-			if ( nbAuthenticatedByNickname.containsKey(clientNickname) ) {
+			if (nbAuthenticatedByNickname.containsKey(clientNickname)) {
 				// increment
-				nbAuthenticatedByNickname.put(clientNickname, nbAuthenticatedByNickname.get(clientNickname).intValue() + 1);
+				nbAuthenticatedByNickname.put(clientNickname,
+						nbAuthenticatedByNickname.get(clientNickname).intValue() + 1);
 			} else {
 				// initialize and count 1
 				nbAuthenticatedByNickname.put(clientNickname, 1);
 			}
 			// remember current sc as a scMessages
-			scMessagesByNickname.put(clientNickname, sc); 
+			scMessagesByNickname.put(clientNickname, sc);
 		}
 		if (opcode == (byte) 11) {
 			nicknamesFromSc.put(sc, clientNickname);
-			if ( nbAuthenticatedByNickname.containsKey(clientNickname) ) {
+			if (nbAuthenticatedByNickname.containsKey(clientNickname)) {
 				// increment
-				nbAuthenticatedByNickname.put(clientNickname, nbAuthenticatedByNickname.get(clientNickname).intValue() + 1);
+				nbAuthenticatedByNickname.put(clientNickname,
+						nbAuthenticatedByNickname.get(clientNickname).intValue() + 1);
 			} else {
 				// initialize and count 1
 				nbAuthenticatedByNickname.put(clientNickname, 1);
@@ -517,7 +525,8 @@ public class ClientServer {
 			nbAuthenticatedByNickname.put(clientNickname, 0); // reset
 			DualConnection connection;
 			synchronized (lock) {
-				connection = DualConnection.createFromScs(scMessagesByNickname.get(clientNickname), scFilesByNickname.get(clientNickname));
+				connection = DualConnection.createFromScs(scMessagesByNickname.get(clientNickname),
+						scFilesByNickname.get(clientNickname));
 			}
 			socketChannelClients.put(clientNickname, connection);
 			privateConnectionsId.remove(clientNickname); // no more needed

@@ -19,6 +19,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
+/**
+ * Server for the cat in non-blocking mode.
+ * 
+ * @author Cheneau and Lee
+ *
+ */
 public class Server {
 	private static final Logger LOGGER = Logger.getLogger("ServerLogger");
 	private FileHandler fh;
@@ -65,8 +71,6 @@ public class Server {
 	/**
 	 * Launch server in ready state.
 	 * 
-	 * @throws IOException
-	 *             If some other I/O error occurs on server side.
 	 */
 	public void launch() {
 		try {
@@ -315,8 +319,8 @@ public class Server {
 	 * 
 	 * @param nickname
 	 *            of unregistered client
-	 * @param bbNickname
-	 *            {@link ByteBuffer} containing unregistered client's nickname.
+	 * @param context
+	 *            associated with this client
 	 */
 	public void unregisterClient(String nickname, Context context) {
 		if (null != clients.remove(nickname)) {
@@ -358,8 +362,7 @@ public class Server {
 			totalSize += bbNickname.remaining();
 			list.add(bbNickname);
 		}
-		ByteBuffer bbmsg = ByteBuffer
-				.allocate(Byte.BYTES + Integer.BYTES + Integer.BYTES * list.size() + totalSize);
+		ByteBuffer bbmsg = ByteBuffer.allocate(Byte.BYTES + Integer.BYTES + Integer.BYTES * list.size() + totalSize);
 		bbmsg.put((byte) 3);
 		bbmsg.putInt(list.size());
 		list.forEach(bb -> {
@@ -380,8 +383,7 @@ public class Server {
 	public void askPermissionPrivateConnection(String fromNickname, String toNickname) {
 		Context context = clients.get(toNickname);
 		if (null == context) {
-			LOGGER.warning("Asking for private connection from " + fromNickname
-					+ "with unknown client " + toNickname);
+			LOGGER.warning("Asking for private connection from " + fromNickname + "with unknown client " + toNickname);
 			return;
 		}
 		context.askPrivateCommunication(fromNickname);
@@ -401,12 +403,10 @@ public class Server {
 	 * @param id
 	 *            that client A will need to provide to authenticate
 	 */
-	public void acceptPrivateConnection(String fromNickname, String toNickname, InetAddress inet,
-			int port, long id) {
+	public void acceptPrivateConnection(String fromNickname, String toNickname, InetAddress inet, int port, long id) {
 		Context context = clients.get(toNickname);
 		if (null == context) {
-			LOGGER.warning("Accept for private connection from " + fromNickname
-					+ "with unknown client " + toNickname);
+			LOGGER.warning("Accept for private connection from " + fromNickname + "with unknown client " + toNickname);
 			return;
 		}
 		context.acceptPrivateCommunication(fromNickname, inet, port, id);
@@ -423,8 +423,7 @@ public class Server {
 	public void refusePrivateConnection(String fromNickname, String toNickname) {
 		Context context = clients.get(toNickname);
 		if (null == context) {
-			LOGGER.warning("Refuse for private connection from " + fromNickname
-					+ "with unknown client " + toNickname);
+			LOGGER.warning("Refuse for private connection from " + fromNickname + "with unknown client " + toNickname);
 			return;
 		}
 		context.refusePrivateCommunication(fromNickname);
@@ -471,8 +470,7 @@ public class Server {
 				LOGGER.fine("\tKey for ServerSocketChannel : " + interestOpsToString(key));
 			} else {
 				SocketChannel sc = (SocketChannel) channel;
-				LOGGER.fine("\tKey for Client " + remoteAddressToString(sc) + " : "
-						+ interestOpsToString(key));
+				LOGGER.fine("\tKey for Client " + remoteAddressToString(sc) + " : " + interestOpsToString(key));
 			}
 
 		}
@@ -508,8 +506,7 @@ public class Server {
 				LOGGER.fine("\tServerSocketChannel can perform : " + possibleActionsToString(key));
 			} else {
 				SocketChannel sc = (SocketChannel) channel;
-				LOGGER.fine("\tClient " + remoteAddressToString(sc) + " can perform : "
-						+ possibleActionsToString(key));
+				LOGGER.fine("\tClient " + remoteAddressToString(sc) + " can perform : " + possibleActionsToString(key));
 			}
 		}
 	}

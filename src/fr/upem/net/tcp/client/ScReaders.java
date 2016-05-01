@@ -5,6 +5,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
 
+/**
+ * Utility class for reading {@code ByteBuffer}s.
+ * 
+ * @author Cheneau and Lee
+ *
+ */
 public class ScReaders {
 
 	private ScReaders() {
@@ -146,16 +152,14 @@ public class ScReaders {
 		bb.get(addr);
 		return addr;
 	}
-	
+
 	/**
 	 * Read the specified amount of {@code byte}s.
 	 * 
 	 * @param sc
 	 *            {@code SocketChannel} to read from.
-	 * @param bb
-	 *            {@code ByteBuffer} to save data in.
-	 * @param limit
-	 *            number of bytes to be read
+	 * @param size
+	 *            of the file to be read
 	 * @return the read bytes as an array of bytes
 	 * @throws IOException
 	 *             If some other I/O error occurs.

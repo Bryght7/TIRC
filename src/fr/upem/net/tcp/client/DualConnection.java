@@ -10,7 +10,7 @@ import java.util.Objects;
  * Class describing the two connections which make a private connection. It has
  * a connection for private messages, and another for file transfers.
  * 
- * @author Cheneau & Lee
+ * @author Cheneau and Lee
  *
  */
 public class DualConnection {
@@ -33,8 +33,7 @@ public class DualConnection {
 	 * @return an instance of {@code DualSocketChannel}
 	 */
 	public static DualConnection createFromScs(SocketChannel scMessages, SocketChannel scFiles) {
-		return new DualConnection(Objects.requireNonNull(scMessages),
-				Objects.requireNonNull(scFiles));
+		return new DualConnection(Objects.requireNonNull(scMessages), Objects.requireNonNull(scFiles));
 	}
 
 	/**
@@ -43,8 +42,6 @@ public class DualConnection {
 	 * 
 	 * @param server
 	 *            the server to open the connections on
-	 * @param client
-	 *            the {@code Client} who is opening those connections
 	 * @return an instance of {@code DualSocketChannel}
 	 * @throws IOException
 	 *             if an I/O occurred on open
@@ -62,7 +59,7 @@ public class DualConnection {
 	 * @param bb
 	 *            {@link ByteBuffer} to be written
 	 * @throws IOException
-	 *             if an I/O error occurs
+	 *             if some I/O error occurs
 	 */
 	public void writeInMessages(ByteBuffer bb) throws IOException {
 		scMessages.write(bb);
@@ -75,7 +72,7 @@ public class DualConnection {
 	 * @param bb
 	 *            {@link ByteBuffer} to be written
 	 * @throws IOException
-	 *             if an I/O error occurs
+	 *             if some I/O error occurs
 	 */
 	public void writeInFiles(ByteBuffer bb) throws IOException {
 		scFiles.write(bb);
@@ -88,6 +85,7 @@ public class DualConnection {
 	 * @param bb
 	 *            {@link ByteBuffer} to be written
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	public void writeInAll(ByteBuffer bb) throws IOException {
 		scMessages.write(bb);
@@ -100,14 +98,13 @@ public class DualConnection {
 	 * 
 	 * @param monitoredNickname
 	 *            the nickname to get monitors from
-	 * @param clientGUI
+	 * @param clientGUI graphical user interface
+	 * @param client to get readers from
 	 * @return an array of readers threads ready to be started
 	 */
 	public Thread[] getReaders(String monitoredNickname, ClientGUI clientGUI, Client client) {
-		Runnable rMessages = new ThreadPrivateConnection(scMessages, monitoredNickname, clientGUI,
-				client, true);
-		Runnable rFiles = new ThreadPrivateConnection(scFiles, monitoredNickname, clientGUI, client,
-				false);
+		Runnable rMessages = new ThreadPrivateConnection(scMessages, monitoredNickname, clientGUI, client, true);
+		Runnable rFiles = new ThreadPrivateConnection(scFiles, monitoredNickname, clientGUI, client, false);
 		Thread[] readers = { new Thread(rMessages), new Thread(rFiles) };
 		return readers;
 	}
@@ -116,7 +113,7 @@ public class DualConnection {
 	 * Close all connections making this private connection.
 	 * 
 	 * @throws IOException
-	 *             if I/O error while closing
+	 *             if some I/O error occurs while closing
 	 */
 	public void closeAll() throws IOException {
 		scMessages.close();

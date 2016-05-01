@@ -27,157 +27,167 @@ import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyleContext;
 
+/**
+ * Graphical user interface for a client
+ * 
+ * @author Cheneau and Lee
+ *
+ */
 @SuppressWarnings("serial")
 public class ClientGUI extends JFrame {
 
-    // describe behavior on menu item clicks
-    class MenuItemListener implements ActionListener {
-        public void actionPerformed(ActionEvent e) {
-            switch (e.getActionCommand()) {
-            case "Disconnect":
-                cleanlyQuit();
-                break;
-            }
-        }
-    }
+	// describe behavior on menu item clicks
+	class MenuItemListener implements ActionListener {
+		public void actionPerformed(ActionEvent e) {
+			switch (e.getActionCommand()) {
+			case "Disconnect":
+				cleanlyQuit();
+				break;
+			}
+		}
+	}
 
-    private static final int WIDTH = 640;
-    private static final int HEIGHT = 480;
-    private static final String TITLE = "TIRC Client";
-    private final Client client;
-    private JTextPane chatArea;
+	private static final int WIDTH = 640;
+	private static final int HEIGHT = 480;
+	private static final String TITLE = "TIRC Client";
+	private final Client client;
+	private JTextPane chatArea;
 
-    public ClientGUI(Client client) {
-        super(); // construct a new frame
-        this.client = client;
-        chatArea = buildChat();
-        setFrameSettings();
-        setBehaviorOnClose();
-        buildComponents();
-    }
-    
-    private void buildComponents() {
-        JTextField inputArea = buildInputArea();
-        buildMenu();
+	public ClientGUI(Client client) {
+		super(); // construct a new frame
+		this.client = client;
+		chatArea = buildChat();
+		setFrameSettings();
+		setBehaviorOnClose();
+		buildComponents();
+	}
 
-        inputArea.addKeyListener(new KeyAdapter() {
-            public void keyPressed(KeyEvent e) {
-                // entered a message
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    String text = inputArea.getText();
-                    if (text.isEmpty()) {
-                        return; // ignore event if no input text
-                    }
-                    try {
-                        client.processInput(text);
-                    } catch (IOException ioe) {
+	private void buildComponents() {
+		JTextField inputArea = buildInputArea();
+		buildMenu();
 
-                    }
-                    inputArea.setText(""); // clear text in input area
-                }
-            }
-        });
+		inputArea.addKeyListener(new KeyAdapter() {
+			public void keyPressed(KeyEvent e) {
+				// entered a message
+				if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+					String text = inputArea.getText();
+					if (text.isEmpty()) {
+						return; // ignore event if no input text
+					}
+					try {
+						client.processInput(text);
+					} catch (IOException ioe) {
 
-        pack(); // must be after building all components
-    }
+					}
+					inputArea.setText(""); // clear text in input area
+				}
+			}
+		});
 
-    private void setFrameSettings() {
-        setTitle(TITLE);
-        setResizable(true);
-        setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        setVisible(true);
-        setMinimumSize(new Dimension(200, 250));
-    }
+		pack(); // must be after building all components
+	}
 
-    private void setBehaviorOnClose() {
-        // behavior when manually closing the window
-        addWindowListener(new WindowAdapter() {
-            public void windowClosing(WindowEvent e) {
-                cleanlyQuit();
-            }
-        });
-    }
-    
-    // sends disconnect packet, then closes GUI.
-    private void cleanlyQuit() {
-        try {
-            client.processInput("/quit");
-            exit();
-        } catch (IOException ioe) {
-        }
-    }
-    
-    private JTextPane buildChat() {
-    	JTextPane chatArea = new JTextPane();
-    	chatArea.setFocusable(false);
-    	JPanel noWrapPanel = new JPanel(new BorderLayout());
-    	noWrapPanel.add(chatArea);
-    	JScrollPane scrollPane = new JScrollPane( noWrapPanel );
-    	scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-    	scrollPane.setPreferredSize(new Dimension(WIDTH, HEIGHT));
-    	add(scrollPane, BorderLayout.CENTER); // add it to ClientGUI
-    	return chatArea;
-    }
+	private void setFrameSettings() {
+		setTitle(TITLE);
+		setResizable(true);
+		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+		setVisible(true);
+		setMinimumSize(new Dimension(200, 250));
+	}
 
-    private JTextField buildInputArea() {
-        JTextField inputArea = new JTextField();
-        add(inputArea, BorderLayout.SOUTH);
-        return inputArea;
-    }
+	private void setBehaviorOnClose() {
+		// behavior when manually closing the window
+		addWindowListener(new WindowAdapter() {
+			public void windowClosing(WindowEvent e) {
+				cleanlyQuit();
+			}
+		});
+	}
 
-    // TODO : provide behavior on click
-    private void buildMenu() {
-        JMenuBar menu = new JMenuBar();
-        setJMenuBar(menu);
-        // main menu fields
-        JMenu menuFile = new JMenu("File");
-        JMenu menuHelp = new JMenu("Help");
-        menu.add(menuFile);
-        menu.add(menuHelp);
-        // menu sub items
-        JMenuItem menuFile_Disconnect = new JMenuItem("Disconnect");
-        JMenuItem menuHelp_Commands = new JMenuItem("Commands");
-        menuFile.add(menuFile_Disconnect);
-        menuHelp.add(menuHelp_Commands);
-        // action listeners
-        MenuItemListener menuItemListener = new MenuItemListener();
-        menuFile_Disconnect.addActionListener(menuItemListener);
-    }
+	// sends disconnect packet, then closes GUI.
+	private void cleanlyQuit() {
+		try {
+			client.processInput("/quit");
+			exit();
+		} catch (IOException ioe) {
+		}
+	}
 
-    /**
-     * Prints a String in the client GUI, and then terminate the line. Thread
-     * safe.
-     * 
-     * @param string
-     *            The string to be printed.
-     */
-    public void println(String string, Color color) {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-            	appendToPane(string+"\n", color);
-            }
-        });
-    }
-    
-    private void appendToPane(String msg, Color c) {
-        StyleContext sc = StyleContext.getDefaultStyleContext();
-        AttributeSet aset = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, c);
+	private JTextPane buildChat() {
+		JTextPane chatArea = new JTextPane();
+		chatArea.setFocusable(false);
+		JPanel noWrapPanel = new JPanel(new BorderLayout());
+		noWrapPanel.add(chatArea);
+		JScrollPane scrollPane = new JScrollPane(noWrapPanel);
+		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		scrollPane.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+		add(scrollPane, BorderLayout.CENTER); // add it to ClientGUI
+		return chatArea;
+	}
 
-        aset = sc.addAttribute(aset, StyleConstants.FontFamily, "Lucida Console");
-        aset = sc.addAttribute(aset, StyleConstants.Alignment, StyleConstants.ALIGN_JUSTIFIED);
+	private JTextField buildInputArea() {
+		JTextField inputArea = new JTextField();
+		add(inputArea, BorderLayout.SOUTH);
+		return inputArea;
+	}
 
-        int len = chatArea.getDocument().getLength();
-        chatArea.setCaretPosition(len);
-        chatArea.setCharacterAttributes(aset, false);
-        chatArea.replaceSelection(msg);
-    }
+	// TODO : provide behavior on click
+	private void buildMenu() {
+		JMenuBar menu = new JMenuBar();
+		setJMenuBar(menu);
+		// main menu fields
+		JMenu menuFile = new JMenu("File");
+		JMenu menuHelp = new JMenu("Help");
+		menu.add(menuFile);
+		menu.add(menuHelp);
+		// menu sub items
+		JMenuItem menuFile_Disconnect = new JMenuItem("Disconnect");
+		JMenuItem menuHelp_Commands = new JMenuItem("Commands");
+		menuFile.add(menuFile_Disconnect);
+		menuHelp.add(menuHelp_Commands);
+		// action listeners
+		MenuItemListener menuItemListener = new MenuItemListener();
+		menuFile_Disconnect.addActionListener(menuItemListener);
+	}
 
-    /**
-     * Closes the graphical user interface and terminates the whole client.
-     * 
-     * @throws IOException
-     */
-    public void exit() throws IOException {
-        dispose();
-    }
+	/**
+	 * Prints a String in the client GUI, and then terminate the line. Thread
+	 * safe.
+	 * 
+	 * @param string
+	 *            the string to be printed
+	 * @param color
+	 *            for the text
+	 * 
+	 */
+	public void println(String string, Color color) {
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				appendToPane(string + "\n", color);
+			}
+		});
+	}
+
+	private void appendToPane(String msg, Color c) {
+		StyleContext sc = StyleContext.getDefaultStyleContext();
+		AttributeSet aset = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, c);
+
+		aset = sc.addAttribute(aset, StyleConstants.FontFamily, "Lucida Console");
+		aset = sc.addAttribute(aset, StyleConstants.Alignment, StyleConstants.ALIGN_JUSTIFIED);
+
+		int len = chatArea.getDocument().getLength();
+		chatArea.setCaretPosition(len);
+		chatArea.setCharacterAttributes(aset, false);
+		chatArea.replaceSelection(msg);
+	}
+
+	/**
+	 * Closes the graphical user interface and terminates the whole client.
+	 * 
+	 * @throws IOException
+	 *             if some I/O error occurs
+	 */
+	public void exit() throws IOException {
+		dispose();
+	}
 }

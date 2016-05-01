@@ -3,8 +3,8 @@ package fr.upem.net.tcp.client;
 import static fr.upem.net.tcp.client.ScReaders.readByte;
 import static fr.upem.net.tcp.client.ScReaders.readFileData;
 import static fr.upem.net.tcp.client.ScReaders.readInt;
-import static fr.upem.net.tcp.client.ScReaders.readString;
 import static fr.upem.net.tcp.client.ScReaders.readLong;
+import static fr.upem.net.tcp.client.ScReaders.readString;
 
 import java.awt.Color;
 import java.io.FileOutputStream;
@@ -14,6 +14,12 @@ import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.logging.Logger;
 
+/**
+ * Thread monitoring a connection, receives packets for the client.
+ * 
+ * @author Cheneau and Lee
+ *
+ */
 public class ThreadPrivateConnection implements Runnable {
 	private static final Logger LOGGER = Logger.getLogger("ClientLogger");
 	private final SocketChannel sc;
@@ -36,9 +42,14 @@ public class ThreadPrivateConnection implements Runnable {
 	 *            of client to monitor
 	 * @param clientGUI
 	 *            GUI where to print
+	 * @param client
+	 *            to monitor
+	 * @param messageThread
+	 *            identifies this thread as the thread reading for the private
+	 *            message connection
 	 */
-	public ThreadPrivateConnection(SocketChannel sc, String nickname, ClientGUI clientGUI,
-			Client client, boolean messageThread) {
+	public ThreadPrivateConnection(SocketChannel sc, String nickname, ClientGUI clientGUI, Client client,
+			boolean messageThread) {
 		this.sc = sc;
 		this.nickname = nickname;
 		this.clientGUI = clientGUI;
@@ -58,8 +69,7 @@ public class ThreadPrivateConnection implements Runnable {
 	 * @throws IOException
 	 *             if some I/O error occurs
 	 */
-	private void receivedPrivateMessage(SocketChannel sc, ByteBuffer bb, String nickname)
-			throws IOException {
+	private void receivedPrivateMessage(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
 		int msgSize = readInt(sc, bb);
 		String msg = readString(sc, bb, msgSize, Client.CS_UTF8);
 		clientGUI.println("*" + nickname + "* " + msg, Color.orange);
@@ -76,13 +86,11 @@ public class ThreadPrivateConnection implements Runnable {
 	 *            of client who sent file transfer request
 	 * @throws IOException
 	 */
-	private void receivedFileTransferRequest(SocketChannel sc, ByteBuffer bb, String nickname)
-			throws IOException {
+	private void receivedFileTransferRequest(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
 		int filenameSize = readInt(sc, bb);
 		String filename = readString(sc, bb, filenameSize, Client.CS_UTF8);
 		long filesize = readLong(sc, bb);
-		clientGUI.println(
-				nickname + " wants to send you the file \"" + filename + "\" (" + filesize + " B).",
+		clientGUI.println(nickname + " wants to send you the file \"" + filename + "\" (" + filesize + " B).",
 				Color.magenta);
 		clientGUI.println("Accept ? (/yf " + nickname + " or /nf " + nickname + ")", Color.magenta);
 		// TODO get user input (help)
@@ -107,8 +115,7 @@ public class ThreadPrivateConnection implements Runnable {
 	 * @throws IOException
 	 *             if some I/O error occurs
 	 */
-	private void proceedFileTransfer(SocketChannel sc, ByteBuffer bb, String nickname)
-			throws IOException {
+	private void proceedFileTransfer(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
 		byte accept = readByte(sc, bbin);
 		switch (accept) {
 		case 0: // received an approval
@@ -147,8 +154,8 @@ public class ThreadPrivateConnection implements Runnable {
 		fileStream.write(data);
 		fileStream.close();
 		filesToReceive.remove(nickname); // done transferring the file
-		clientGUI.println("Transfer complete \"" + filename + "\" (" + filesize + " B) from "
-				+ nickname + ".", Color.magenta);
+		clientGUI.println("Transfer complete \"" + filename + "\" (" + filesize + " B) from " + nickname + ".",
+				Color.magenta);
 		client.notifyTransferComplete(nickname);
 	}
 
@@ -176,8 +183,7 @@ public class ThreadPrivateConnection implements Runnable {
 					clientGUI.println("Private connection lost with " + nickname + ".", Color.red);
 					LOGGER.warning("Private connection lost with " + nickname);
 				} else {
-					clientGUI.println("Private connection closed with " + nickname + ".",
-							Color.blue);
+					clientGUI.println("Private connection closed with " + nickname + ".", Color.blue);
 					LOGGER.info("Private connection closed with " + nickname);
 				}
 				client.forgetPrivateConnection(nickname);
@@ -202,14 +208,13 @@ public class ThreadPrivateConnection implements Runnable {
 					break;
 				case 16:
 					String filename = filesToReceive.get(nickname);
-					clientGUI.println(
-							"Transfer started \"" + filename + "\" from " + nickname + ".",
-							Color.magenta);
+					clientGUI.println("Transfer started \"" + filename + "\" from " + nickname + ".", Color.magenta);
 					receivedFile(sc, bbin, nickname);
 					break;
 				case 17:
-					clientGUI.println(nickname + " has received the file \""
-							+ client.getFilenameWithNickname(nickname) + "\".", Color.blue);
+					clientGUI.println(
+							nickname + " has received the file \"" + client.getFilenameWithNickname(nickname) + "\".",
+							Color.blue);
 					client.forgetFileTransfer(nickname);
 					break;
 				default:

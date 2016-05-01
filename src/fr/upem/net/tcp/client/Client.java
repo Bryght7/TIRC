@@ -29,7 +29,7 @@ import java.util.logging.SimpleFormatter;
 /**
  * Class used as a client using the TIRC protocol.
  * 
- * @author Cheneau & Lee
+ * @author Cheneau and Lee
  *
  */
 public class Client {
@@ -109,6 +109,7 @@ public class Client {
 	 *            communication
 	 * @return a new client.
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	public static Client create(InetSocketAddress host, String nickname, int listenport) throws IOException {
 		Objects.requireNonNull(host);
@@ -143,6 +144,7 @@ public class Client {
 	 * Close connection with server and interrupt monitoring threads.
 	 * 
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	private void close() throws IOException {
 		// clientGUI.exit();
@@ -599,6 +601,7 @@ public class Client {
 	 * @param nickname
 	 *            to send the data to
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	public void sendFile(String nickname) throws IOException {
 		DualConnection connection = privateConnections.get(nickname);
@@ -840,6 +843,7 @@ public class Client {
 	 * @param msg
 	 *            message to send
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	private void packetSendFileTransferRequest(Path path) throws IOException {
 		long filesize = Files.size(path);
@@ -859,6 +863,8 @@ public class Client {
 	 * @param path
 	 *            to the file to be sent
 	 * @throws IOException
+	 *             if some I/O error occurs
+	 * @return the {@code ByteBuffer} containing the packet
 	 */
 	public static ByteBuffer packetFile(Path path) throws IOException {
 		long filesize = Files.size(path);
@@ -1038,6 +1044,7 @@ public class Client {
 	 * @param id
 	 *            to send to authenticate
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	private void privateConnect(String clientNickname, InetAddress iaServer, int port, long id) {
 		if (!requestsPrivateConnection.contains(clientNickname)) {
@@ -1159,6 +1166,7 @@ public class Client {
 	 * @param nickname
 	 *            of the other client to notify
 	 * @throws IOException
+	 *             if some I/O error occurs
 	 */
 	public void notifyTransferComplete(String nickname) throws IOException {
 		DualConnection connection = privateConnections.get(nickname);
