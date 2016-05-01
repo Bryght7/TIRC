@@ -1,6 +1,7 @@
 package fr.upem.net.tcp.client;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -14,12 +15,17 @@ import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JTextPane;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyleContext;
 
 @SuppressWarnings("serial")
 public class ClientGUI extends JFrame {
@@ -39,12 +45,12 @@ public class ClientGUI extends JFrame {
     private static final int HEIGHT = 480;
     private static final String TITLE = "TIRC Client";
     private final Client client;
-    private final JTextArea chatArea;
+    private JTextPane chatArea;
 
     public ClientGUI(Client client) {
         super(); // construct a new frame
         this.client = client;
-        chatArea = buildChatArea();
+        chatArea = buildChat();
         setFrameSettings();
         setBehaviorOnClose();
         buildComponents();
@@ -52,7 +58,6 @@ public class ClientGUI extends JFrame {
     
     private void buildComponents() {
         JTextField inputArea = buildInputArea();
-        buildScrollbar(chatArea);
         buildMenu();
 
         inputArea.addKeyListener(new KeyAdapter() {
@@ -81,6 +86,7 @@ public class ClientGUI extends JFrame {
         setResizable(true);
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setVisible(true);
+        setMinimumSize(new Dimension(200, 250));
     }
 
     private void setBehaviorOnClose() {
@@ -101,19 +107,16 @@ public class ClientGUI extends JFrame {
         }
     }
     
-    private JTextArea buildChatArea() {
-        JTextArea chatArea = new JTextArea();
-        chatArea.setLineWrap(true); // auto new-lines
-        chatArea.setWrapStyleWord(true); // don't cut words on new-lines
-        chatArea.setEditable(false); // can't edit inside text
-        return chatArea;
-    }
-
-    private void buildScrollbar(JTextArea ta) {
-        JScrollPane scroller = new JScrollPane(ta);
-        scroller.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scroller.setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        add(scroller, BorderLayout.CENTER); // add it to ClientGUI
+    private JTextPane buildChat() {
+    	JTextPane chatArea = new JTextPane();
+    	chatArea.setFocusable(false);
+    	JPanel noWrapPanel = new JPanel(new BorderLayout());
+    	noWrapPanel.add(chatArea);
+    	JScrollPane scrollPane = new JScrollPane( noWrapPanel );
+    	scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+    	scrollPane.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+    	add(scrollPane, BorderLayout.CENTER); // add it to ClientGUI
+    	return chatArea;
     }
 
     private JTextField buildInputArea() {
@@ -148,14 +151,25 @@ public class ClientGUI extends JFrame {
      * @param string
      *            The string to be printed.
      */
-    public void println(String string) {
+    public void println(String string, Color color) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                chatArea.append(string + "\n");
-                // auto-scroll to bottom
-                chatArea.setCaretPosition(chatArea.getDocument().getLength());
+            	appendToPane(string+"\n", color);
             }
         });
+    }
+    
+    private void appendToPane(String msg, Color c) {
+        StyleContext sc = StyleContext.getDefaultStyleContext();
+        AttributeSet aset = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, c);
+
+        aset = sc.addAttribute(aset, StyleConstants.FontFamily, "Lucida Console");
+        aset = sc.addAttribute(aset, StyleConstants.Alignment, StyleConstants.ALIGN_JUSTIFIED);
+
+        int len = chatArea.getDocument().getLength();
+        chatArea.setCaretPosition(len);
+        chatArea.setCharacterAttributes(aset, false);
+        chatArea.replaceSelection(msg);
     }
 
     /**

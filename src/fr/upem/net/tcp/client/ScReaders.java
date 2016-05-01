@@ -110,8 +110,7 @@ public class ScReaders {
 	 * @throws IOException
 	 *             If some other I/O error occurs.
 	 */
-	public static String readString(SocketChannel sc, ByteBuffer bb, int size, Charset cs)
-			throws IOException {
+	public static String readString(SocketChannel sc, ByteBuffer bb, int size, Charset cs) throws IOException {
 		bb.clear();
 		bb.limit(size);
 		if (!readFully(sc, bb)) {
@@ -135,8 +134,7 @@ public class ScReaders {
 	 * @throws IOException
 	 *             If some other I/O error occurs.
 	 */
-	public static byte[] readAddress(SocketChannel sc, ByteBuffer bb, boolean isIpv4)
-			throws IOException {
+	public static byte[] readAddress(SocketChannel sc, ByteBuffer bb, boolean isIpv4) throws IOException {
 		int size = (isIpv4) ? 4 : 32;
 		bb.clear();
 		bb.limit(size);
@@ -148,4 +146,27 @@ public class ScReaders {
 		bb.get(addr);
 		return addr;
 	}
+	
+	/**
+	 * Read the specified amount of {@code byte}s.
+	 * 
+	 * @param sc
+	 *            {@code SocketChannel} to read from.
+	 * @param bb
+	 *            {@code ByteBuffer} to save data in.
+	 * @param limit
+	 *            number of bytes to be read
+	 * @return the read bytes as an array of bytes
+	 * @throws IOException
+	 *             If some other I/O error occurs.
+	 */
+	public static byte[] readFileData(SocketChannel sc, int size) throws IOException {
+		ByteBuffer bb = ByteBuffer.allocate(size);
+		if (!readFully(sc, bb)) {
+			throw new IOException("connection lost (readfully byte)");
+		}
+		bb.flip();
+		return bb.array();
+	}
+
 }

@@ -1,10 +1,13 @@
 package fr.upem.net.tcp.client;
 
 import static fr.upem.net.tcp.client.ScReaders.readByte;
+import static fr.upem.net.tcp.client.ScReaders.readFileData;
 import static fr.upem.net.tcp.client.ScReaders.readInt;
 import static fr.upem.net.tcp.client.ScReaders.readLong;
 import static fr.upem.net.tcp.client.ScReaders.readString;
 
+import java.awt.Color;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -12,6 +15,8 @@ import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -19,6 +24,8 @@ import java.util.logging.Logger;
 public class ClientServer {
 	private static final Logger LOGGER = Logger.getLogger("ClientLogger");
 	private static final int MAX_THREADS = 10;
+	/** Buffer to contain packets from client acting as server */
+	private final ByteBuffer bbout = ByteBuffer.allocate(Client.BUFSIZ);
 	private final ServerSocketChannel serverSocketChannel;
 	/** {@link SocketChannel} array of clients connected to server. */
 	private final SocketChannel[] scs;
@@ -31,10 +38,24 @@ public class ClientServer {
 	 */
 	private final ConcurrentHashMap<String, Long> privateConnectionsId = new ConcurrentHashMap<>();
 	/** Associate to a {@link SocketChannel}, nickname of user connected. */
-	private final ConcurrentHashMap<SocketChannel, String> nicknamesConnected = new ConcurrentHashMap<>();
-	/** Associate to a nickname its {@link SocketChannel}. */
-	private final ConcurrentHashMap<String, SocketChannel> socketChannelClients = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<SocketChannel, String> nicknamesFromSc = new ConcurrentHashMap<>();
+	/** Associate to a nickname its {@link DualConnection}. */
+	private final ConcurrentHashMap<String, DualConnection> socketChannelClients = new ConcurrentHashMap<>();
 	private ClientGUI clientGUI;
+	/**
+	 * Used to add both sockets into {@code socketChannelClients}, once it's
+	 * been built.
+	 */
+	private final SocketChannel[] authenticationArray = new SocketChannel[2];
+	/** Number of authentication packet received, action when value is 2. */
+	private int nbAuthenticated = 0;
+
+	/**
+	 * Associate a nickname with the name of the file to be received from him
+	 */
+	private HashMap<String, String> filesToReceive = new HashMap<>();
+	/** Associate nickname to the file to be sent to him */
+	private HashMap<String, Path> filesToSendAsServer = new HashMap<>();
 
 	/* Core */
 
@@ -73,6 +94,16 @@ public class ClientServer {
 	}
 
 	/**
+	 * Link the files this client (acting as server) will send, with the files
+	 * to send in the client.
+	 * 
+	 * @param map the map to the files to send in the client
+	 */
+	public void setFilesToSend(HashMap<String, Path> map) {
+		this.filesToSendAsServer = map;
+	}
+
+	/**
 	 * Run method for a thread, one thread per client.
 	 */
 	private void run() {
@@ -91,15 +122,18 @@ public class ClientServer {
 					} catch (AsynchronousCloseException ace) {
 						// client timeout continue
 						continue;
-						// disconnected with client
-					} catch (IOException ioe) {
+					} catch (IOException ioe) { // disconnected with client
 						LOGGER.log(Level.WARNING, ioe.toString(), ioe);
 					} catch (InterruptedException ie) {
 						LOGGER.log(Level.INFO, "Server interrupted: " + ie.toString(), ie);
 						return;
 					} finally {
-						clientGUI.println("Private connection closed.");
-						silentlyClose(client);
+						LOGGER.info("Private connection closed.");
+						// close both messages and files connections
+						DualConnection connection = getDualConnectionFromSc(client);
+						if (null != connection) {
+							silentlyClose(connection);
+						}
 					}
 				} catch (ClosedChannelException ace) {
 					return;
@@ -109,6 +143,14 @@ public class ClientServer {
 		} catch (IOException e) {
 			return;
 		}
+	}
+
+	private DualConnection getDualConnectionFromSc(SocketChannel client) {
+		String nicknameServed = nicknamesFromSc.get(client);
+		if (null == nicknameServed) {
+			return null;
+		}
+		return socketChannelClients.get(nicknameServed);
 	}
 
 	/**
@@ -124,11 +166,11 @@ public class ClientServer {
 	private void serve(SocketChannel sc) throws IOException, InterruptedException {
 		ByteBuffer bbin = ByteBuffer.allocate(Client.BUFSIZ);
 		if (!authentication(sc, bbin)) {
-			clientGUI.println("Could not authentificate client");
-			LOGGER.warning(Client.remoteAddressToString(sc) + ": attempted to connect with false token");
+			clientGUI.println("Could not authentificate client", Color.red);
+			LOGGER.warning(Client.remoteAddressToString(sc) + ": attempted to connected with false token");
 			return;
 		}
-		String nicknameServed = nicknamesConnected.get(sc);
+		String nicknameServed = nicknamesFromSc.get(sc);
 		if (null == nicknameServed) {
 			LOGGER.warning("Unknown client attempted to connect.");
 			return;
@@ -138,22 +180,43 @@ public class ClientServer {
 			try {
 				byte opcode = readByte(sc, bbin);
 				switch (opcode) {
-				case 11:
+				case 12:
 					receivedMessage(sc, bbin, nicknameServed);
 					break;
-				case 12:
+				case 13:
 					hasClosed = true;
-					clientGUI.println(nicknameServed + " has closed private connection.");
+					clientGUI.println(nicknameServed + " has closed private connection.", Color.blue);
 					return;
+				case 14:
+					receivedFileTransferRequest(sc, bbin, nicknameServed);
+					break;
+				case 15:
+					receivedFileTransferReply(sc, bbin, nicknameServed);
+					break;
+				case 16:
+					String filename = filesToReceive.get(nicknameServed);
+					clientGUI.println("Transfer started \"" + filename + "\" from " + nicknameServed + ".",
+							Color.magenta);
+					receivedFile(sc, bbin, nicknameServed);
+					break;
+				case 17:
+					clientGUI.println(nicknameServed + " has received the file \"" + filesToSendAsServer.get(nicknameServed) + "\".", Color.blue);
+					forgetFileTransfer(nicknameServed);
+					break;
 				default:
 					LOGGER.warning("Unknown opcode: " + opcode + " from " + nicknameServed);
 					return;
 				}
 			} catch (IOException ioe) {
-				if (!hasClosed) {
-					clientGUI.println("Lost private connection with " + nicknameServed);
+				if (!hasClosed && socketChannelClients.containsKey(nicknameServed)) {
+					clientGUI.println("Lost private connection with " + nicknameServed, Color.red);
 					LOGGER.warning("Lost private connection with " + nicknameServed);
+					unregisterClient(nicknameServed);
 					throw ioe;
+				} else {
+					clientGUI.println("Closed private connection with " + nicknameServed, Color.blue);
+					LOGGER.info("Closed private connection with " + nicknameServed);
+					return;
 				}
 			}
 		}
@@ -168,22 +231,23 @@ public class ClientServer {
 	 *             if some I/O error occurs
 	 */
 	public void closePrivateConnection(String nickname) throws IOException {
-		SocketChannel sc = socketChannelClients.get(nickname);
+		DualConnection connection = socketChannelClients.get(nickname);
 		socketChannelClients.remove(nickname);
-		nicknamesConnected.remove(sc);
-		silentlyClose(sc);
+		nicknamesFromSc.values().remove(nickname);
+		silentlyClose(connection);
 	}
 
 	/**
-	 * Silently close a {@link SocketChannel} without throwing any exception.
+	 * Silently close all connections making a private connection, without
+	 * throwing any exception.
 	 * 
-	 * @param socketChannel
+	 * @param connection
 	 *            to close
 	 */
-	private static void silentlyClose(SocketChannel sc) {
-		if (sc != null) {
+	private static void silentlyClose(DualConnection connection) {
+		if (connection != null) {
 			try {
-				sc.close();
+				connection.closeAll();
 			} catch (IOException e) {
 				// Do nothing
 			}
@@ -236,8 +300,18 @@ public class ClientServer {
 		return true;
 	}
 
+	private void unregisterClient(String nickname) {
+		socketChannelClients.remove(nickname);
+		nicknamesFromSc.values().remove(nickname);
+	}
+
+	public void revokeRequest(String nickname) {
+		privateConnectionsId.remove(nickname);
+	}
+
 	/**
-	 * Send a message to connected client.
+	 * Send a private request to a connected client, in both the private
+	 * messages and the file transfers connections.
 	 * 
 	 * @param toNickname
 	 *            nickname of client to send message to
@@ -248,13 +322,59 @@ public class ClientServer {
 	 * @throws IOException
 	 *             if some I/O error occurs
 	 */
-	public boolean sendMessage(String toNickname, ByteBuffer bbmsg) throws IOException {
-		SocketChannel sc = socketChannelClients.get(toNickname);
-		if (null == sc) {
+	public boolean sendPrivateGlobal(String toNickname, ByteBuffer bb) throws IOException {
+		DualConnection connection = socketChannelClients.get(toNickname);
+		if (null == connection) {
+			return false;
+		}
+		bb.flip();
+		connection.writeInAll(bb);
+		return true;
+	}
+
+	/**
+	 * Send a private message to a connected client, in the private message
+	 * connection only.
+	 * 
+	 * @param toNickname
+	 *            nickname of client to send message to
+	 * @param bbmsg
+	 *            {@link ByteBuffer} containing the message
+	 * @return {@code true} if message was sent, {@code false} if client was not
+	 *         found
+	 * @throws IOException
+	 *             if some I/O error occurs
+	 */
+	public boolean sendPrivateMessage(String toNickname, ByteBuffer bbmsg) throws IOException {
+		DualConnection connection = socketChannelClients.get(toNickname);
+		if (null == connection) {
 			return false;
 		}
 		bbmsg.flip();
-		sc.write(bbmsg);
+		connection.writeInMessages(bbmsg);
+		return true;
+	}
+
+	/**
+	 * Send a private file to a connected client, in the file transfers
+	 * connection only.
+	 * 
+	 * @param toNickname
+	 *            nickname of client to send the file to
+	 * @param bbFile
+	 *            {@link ByteBuffer} containing the file
+	 * @return {@code true} if message was sent, {@code false} if client was not
+	 *         found
+	 * @throws IOException
+	 *             if some I/O error occurs
+	 */
+	public boolean sendPrivateFile(String toNickname, ByteBuffer bbFile) throws IOException {
+		DualConnection connection = socketChannelClients.get(toNickname);
+		if (null == connection) {
+			return false;
+		}
+		bbFile.flip();
+		connection.writeInFiles(bbFile);
 		return true;
 	}
 
@@ -284,32 +404,55 @@ public class ClientServer {
 	 */
 	private boolean authentication(SocketChannel sc, ByteBuffer bb) throws IOException {
 		byte opcode = readByte(sc, bb);
-		if (opcode != (byte) 10) {
-			LOGGER.warning("Not expected opcode: " + opcode);
+		if (opcode != (byte) 10 && opcode != (byte) 11) {
+			LOGGER.warning("Unexpected opcode: " + opcode);
 		}
 		int nicknameSize = readInt(sc, bb);
 		String clientNickname = readString(sc, bb, nicknameSize, Client.CS_NICKNAME);
 		long id = readLong(sc, bb);
 		long givenId = privateConnectionsId.getOrDefault(clientNickname, (long) 0);
-		privateConnectionsId.remove(clientNickname); // no more needed
+
 		if ((long) 0 == givenId || givenId != id) {
 			LOGGER.warning(
 					"Wrong token given from: " + clientNickname + " (given=" + givenId + " expected=" + id + ")");
 			return false;
 		}
-		nicknamesConnected.put(sc, clientNickname);
-		synchronized (lock) {
-			socketChannelClients.put(clientNickname, sc);
+
+		if (opcode == (byte) 10) {
+			nicknamesFromSc.put(sc, clientNickname);
+			authenticationArray[0] = sc;
+			nbAuthenticated++;
 		}
-		clientGUI.println("Private connection established with " + clientNickname + ".");
-		clientGUI.println("To communicate with him privately use: /w " + clientNickname);
-		clientGUI.println("To send a file to him use: /f " + clientNickname);
+		if (opcode == (byte) 11) {
+			nicknamesFromSc.put(sc, clientNickname);
+			authenticationArray[1] = sc;
+			nbAuthenticated++;
+		}
+		// if received both opcode 10+11, now we can add stuff
+		if (nbAuthenticated == 2) {
+			nbAuthenticated = 0; // reset
+			DualConnection connection = DualConnection.createFromScs(authenticationArray[0], authenticationArray[1]);
+			synchronized (lock) {
+				socketChannelClients.put(clientNickname, connection);
+			}
+			clearAuthenticationArray();
+			privateConnectionsId.remove(clientNickname); // no more needed
+			clientGUI.println("Private connection established with " + clientNickname + ".", Color.blue);
+			clientGUI.println("To send a private message, use: /w " + clientNickname, Color.blue);
+			clientGUI.println("To send a file, use: /f " + clientNickname, Color.blue);
+		}
 		return true;
 	}
+
+	private void clearAuthenticationArray() {
+		authenticationArray[0] = null;
+		authenticationArray[1] = null;
+	}
+
 	/* handle opcode */
 
 	/**
-	 * If opcode 11, a message was received.
+	 * If opcode 12, a message was received.
 	 * 
 	 * @param sc
 	 *            {@link SocketChannel} where message was received from
@@ -323,6 +466,148 @@ public class ClientServer {
 	private void receivedMessage(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
 		int msgSize = readInt(sc, bb);
 		String msg = readString(sc, bb, msgSize, Client.CS_UTF8);
-		clientGUI.println("*" + nickname + "* " + msg);
+		clientGUI.println("*" + nickname + "* " + msg, Color.orange);
 	}
+
+	/**
+	 * If opcode 14, a file transfer request was received.
+	 * 
+	 * @param sc
+	 *            {@link SocketChannel} where message was received from
+	 * @param bb
+	 *            {@link ByteBuffer} to save output to
+	 * @param nickname
+	 *            of client who sent message
+	 * @throws IOException
+	 *             if some I/O error occurs
+	 */
+	private void receivedFileTransferRequest(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
+		int filenameSize = readInt(sc, bb);
+		String filename = readString(sc, bb, filenameSize, Client.CS_UTF8);
+		long filesize = readLong(sc, bb);
+		clientGUI.println(nickname + " wants to send you the file \"" + filename + "\" (" + filesize + " B).",
+				Color.magenta);
+		clientGUI.println("Accept ? (/yf " + nickname + " or /nf " + nickname + ")", Color.magenta);
+		// TODO get user input (help)
+		String input = "yf";
+		if (input.equals("yf")) {
+			acceptFileTransfer(nickname);
+			filesToReceive.put(nickname, filename);
+		} else {
+			refuseFileTransfer(nickname);
+		}
+	}
+
+	/**
+	 * If opcode 15, received file transfer reply
+	 * 
+	 * @param sc
+	 *            {@link SocketChannel} where the reply came from
+	 * @param bb
+	 *            {@link ByteBuffer} to save output to
+	 * @param nickname
+	 *            of client who sent the reply
+	 * @throws IOException
+	 */
+	private void receivedFileTransferReply(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
+		byte accept = readByte(sc, bb);
+		switch (accept) {
+		case 0: // received an approval
+			clientGUI.println(nickname + " has accepted the file transfer.", Color.magenta);
+			sendFile(nickname);
+			break;
+		case 1:
+			clientGUI.println(nickname + " has refused the file transfer.", Color.magenta);
+			forgetFileTransfer(nickname);
+			break;
+		default:
+			System.err.println("Unknown opcode: " + accept);
+			clientGUI.println("Private connection lost with " + nickname, Color.red);
+			forgetFileTransfer(nickname);
+			return;
+		}
+	}
+
+	/**
+	 * If opcode 16, a file was received.
+	 * 
+	 * @param sc
+	 *            {@link SocketChannel} where message was received from
+	 * @param bb
+	 *            {@link ByteBuffer} to save output to
+	 * @param nickname
+	 *            of client who sent message
+	 * @throws IOException
+	 *             if some I/O error occurs
+	 */
+	private void receivedFile(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
+		long filesize = readLong(sc, bb);
+		byte[] data = readFileData(sc, Byte.BYTES * (int) filesize);
+		String filename = filesToReceive.get(nickname);
+		FileOutputStream fileStream = new FileOutputStream(filename);
+		fileStream.write(data);
+		fileStream.close();
+		filesToReceive.remove(nickname); // done transferring the file
+		clientGUI.println("Transfer complete \"" + filename + "\" (" + filesize + " B) from " + nickname + ".",
+				Color.magenta);
+		notifyTransferComplete(nickname);
+	}
+
+	/* packets to send as a SERVER */
+
+	// TODO maybe this belongs in Client.java after implementing user input ?
+	private void acceptFileTransfer(String nickname) throws IOException {
+		DualConnection connection = socketChannelClients.get(nickname);
+		if (null == connection) {
+			return;
+		}
+		bbout.clear();
+		bbout.put((byte) 15);
+		bbout.put((byte) 0);
+		bbout.flip();
+		connection.writeInFiles(bbout);
+	}
+
+	private void refuseFileTransfer(String nickname) throws IOException {
+		DualConnection connection = socketChannelClients.get(nickname);
+		if (null == connection) {
+			return;
+		}
+		bbout.clear();
+		bbout.put((byte) 15);
+		bbout.put((byte) 1);
+		bbout.flip();
+		connection.writeInFiles(bbout);
+	}
+
+	private void notifyTransferComplete(String nickname) throws IOException {
+		DualConnection connection = socketChannelClients.get(nickname);
+		if (null == connection) {
+			return;
+		}
+		bbout.clear();
+		bbout.put((byte) 17);
+		bbout.flip();
+		connection.writeInFiles(bbout);
+	}
+
+	private void sendFile(String nickname) throws IOException {
+		DualConnection connection = socketChannelClients.get(nickname);
+		if (null == connection) {
+			return;
+		}
+		Path path = filesToSendAsServer.get(nickname);
+		ByteBuffer bbFile = Client.packetFile(path);
+		bbFile.flip();
+		connection.writeInFiles(bbFile);
+	}
+
+	public void addFileToSendAsServer(String toNickname, Path path) {
+		filesToSendAsServer.put(toNickname, path);
+	}
+
+	public void forgetFileTransfer(String nickname) {
+		filesToSendAsServer.remove(nickname);
+	}
+
 }

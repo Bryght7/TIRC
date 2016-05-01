@@ -113,8 +113,8 @@ public class Context {
 		commands.put((byte) 4, () -> receivedMessage());
 		commands.put((byte) 6, () -> privateCommunicationRequest());
 		commands.put((byte) 8, () -> privateCommunicationAnswer());
-		commands.put((byte) 16, () -> disconnect());
-		commands.put((byte) 18, () -> keepAlive());
+		commands.put((byte) 18, () -> disconnect());
+		commands.put((byte) 20, () -> keepAlive());
 	}
 
 	public String remoteAddressToString() {
@@ -330,7 +330,7 @@ public class Context {
 	}
 
 	/**
-	 * If received opcode 16, client has left.
+	 * If received opcode 17, client has left.
 	 */
 	private void disconnect() {
 		unregister();
@@ -367,7 +367,7 @@ public class Context {
 		bbNickname.flip();
 		int size = bbNickname.remaining();
 		ByteBuffer bbmsg = ByteBuffer.allocate(Byte.BYTES + Integer.BYTES + size);
-		bbmsg.put((byte) 17);
+		bbmsg.put((byte) 19);
 		bbmsg.putInt(size);
 		bbmsg.put(bbNickname);
 		registerMessage(bbmsg);
@@ -417,7 +417,7 @@ public class Context {
 		bb.put((byte) 9);
 		bb.put((byte) 0);
 		bb.putInt(nicknameSize);
-		bb.put(bbNickname);
+		bb.put(bbNickname);	
 		bb.put(ipVersion);
 		bb.put(addr);
 		bb.putInt(port);
