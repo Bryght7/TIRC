@@ -33,7 +33,8 @@ public class DualConnection {
 	 * @return an instance of {@code DualSocketChannel}
 	 */
 	public static DualConnection createFromScs(SocketChannel scMessages, SocketChannel scFiles) {
-		return new DualConnection(Objects.requireNonNull(scMessages), Objects.requireNonNull(scFiles));
+		return new DualConnection(Objects.requireNonNull(scMessages),
+				Objects.requireNonNull(scFiles));
 	}
 
 	/**
@@ -103,8 +104,10 @@ public class DualConnection {
 	 * @return an array of readers threads ready to be started
 	 */
 	public Thread[] getReaders(String monitoredNickname, ClientGUI clientGUI, Client client) {
-		Runnable rMessages = new ThreadPrivateConnection(scMessages, monitoredNickname, clientGUI, client);
-		Runnable rFiles = new ThreadPrivateConnection(scFiles, monitoredNickname, clientGUI, client);
+		Runnable rMessages = new ThreadPrivateConnection(scMessages, monitoredNickname, clientGUI,
+				client, true);
+		Runnable rFiles = new ThreadPrivateConnection(scFiles, monitoredNickname, clientGUI, client,
+				false);
 		Thread[] readers = { new Thread(rMessages), new Thread(rFiles) };
 		return readers;
 	}

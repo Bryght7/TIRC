@@ -12,13 +12,16 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
+import java.util.logging.Logger;
 
 public class ThreadPrivateConnection implements Runnable {
+	private static final Logger LOGGER = Logger.getLogger("ClientLogger");
 	private final SocketChannel sc;
 	private final String nickname;
 	private final ByteBuffer bbin = ByteBuffer.allocate(Client.BUFSIZ);
 	private final ClientGUI clientGUI;
 	private final Client client;
+	private final boolean isMessageThread;
 	/**
 	 * Associate a nickname with the name of the file to be received from him
 	 */
@@ -34,11 +37,13 @@ public class ThreadPrivateConnection implements Runnable {
 	 * @param clientGUI
 	 *            GUI where to print
 	 */
-	public ThreadPrivateConnection(SocketChannel sc, String nickname, ClientGUI clientGUI, Client client) {
+	public ThreadPrivateConnection(SocketChannel sc, String nickname, ClientGUI clientGUI,
+			Client client, boolean messageThread) {
 		this.sc = sc;
 		this.nickname = nickname;
 		this.clientGUI = clientGUI;
 		this.client = client;
+		this.isMessageThread = messageThread;
 	}
 
 	/**
@@ -53,7 +58,8 @@ public class ThreadPrivateConnection implements Runnable {
 	 * @throws IOException
 	 *             if some I/O error occurs
 	 */
-	private void receivedPrivateMessage(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
+	private void receivedPrivateMessage(SocketChannel sc, ByteBuffer bb, String nickname)
+			throws IOException {
 		int msgSize = readInt(sc, bb);
 		String msg = readString(sc, bb, msgSize, Client.CS_UTF8);
 		clientGUI.println("*" + nickname + "* " + msg, Color.orange);
@@ -70,11 +76,13 @@ public class ThreadPrivateConnection implements Runnable {
 	 *            of client who sent file transfer request
 	 * @throws IOException
 	 */
-	private void receivedFileTransferRequest(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
+	private void receivedFileTransferRequest(SocketChannel sc, ByteBuffer bb, String nickname)
+			throws IOException {
 		int filenameSize = readInt(sc, bb);
 		String filename = readString(sc, bb, filenameSize, Client.CS_UTF8);
 		long filesize = readLong(sc, bb);
-		clientGUI.println(nickname + " wants to send you the file \"" + filename + "\" (" + filesize + " B).",
+		clientGUI.println(
+				nickname + " wants to send you the file \"" + filename + "\" (" + filesize + " B).",
 				Color.magenta);
 		clientGUI.println("Accept ? (/yf " + nickname + " or /nf " + nickname + ")", Color.magenta);
 		// TODO get user input (help)
@@ -99,7 +107,8 @@ public class ThreadPrivateConnection implements Runnable {
 	 * @throws IOException
 	 *             if some I/O error occurs
 	 */
-	private void proceedFileTransfer(SocketChannel sc, ByteBuffer bb, String nickname) throws IOException {
+	private void proceedFileTransfer(SocketChannel sc, ByteBuffer bb, String nickname)
+			throws IOException {
 		byte accept = readByte(sc, bbin);
 		switch (accept) {
 		case 0: // received an approval
@@ -138,13 +147,12 @@ public class ThreadPrivateConnection implements Runnable {
 		fileStream.write(data);
 		fileStream.close();
 		filesToReceive.remove(nickname); // done transferring the file
-		clientGUI.println("Transfer complete \"" + filename + "\" (" + filesize + " B) from " + nickname + ".",
-				Color.magenta);
+		clientGUI.println("Transfer complete \"" + filename + "\" (" + filesize + " B) from "
+				+ nickname + ".", Color.magenta);
 		client.notifyTransferComplete(nickname);
 	}
-	
-	@Override
-	public void run() {
+
+	private void runMessage() {
 		while (!Thread.interrupted()) {
 			try {
 				byte opcode = readByte(sc, bbin);
@@ -156,6 +164,36 @@ public class ThreadPrivateConnection implements Runnable {
 					clientGUI.println(nickname + " has closed private connection.", Color.blue);
 					client.forgetPrivateConnection(nickname);
 					return;
+				default:
+					System.err.println("Unknown opcode: " + opcode);
+					clientGUI.println("Private connection lost with " + nickname + ".", Color.red);
+					LOGGER.warning("Private connection lost with " + nickname);
+					client.forgetPrivateConnection(nickname);
+					return;
+				}
+			} catch (IOException ioe) {
+				if (!Thread.interrupted()) {
+					clientGUI.println("Private connection lost with " + nickname + ".", Color.red);
+					LOGGER.warning("Private connection lost with " + nickname);
+				} else {
+					clientGUI.println("Private connection closed with " + nickname + ".",
+							Color.blue);
+					LOGGER.info("Private connection closed with " + nickname);
+				}
+				client.forgetPrivateConnection(nickname);
+				return;
+			}
+		}
+	}
+
+	private void runFile() {
+		while (!Thread.interrupted()) {
+			try {
+				byte opcode = readByte(sc, bbin);
+				switch (opcode) {
+				case 13:
+					client.forgetPrivateConnection(nickname);
+					return;
 				case 14:
 					receivedFileTransferRequest(sc, bbin, nickname);
 					break;
@@ -164,29 +202,41 @@ public class ThreadPrivateConnection implements Runnable {
 					break;
 				case 16:
 					String filename = filesToReceive.get(nickname);
-					clientGUI.println("Transfer started \"" + filename + "\" from " + nickname + ".",
+					clientGUI.println(
+							"Transfer started \"" + filename + "\" from " + nickname + ".",
 							Color.magenta);
 					receivedFile(sc, bbin, nickname);
 					break;
 				case 17:
-					clientGUI.println(nickname + " has received the file \"" + client.getFilenameWithNickname(nickname) + "\".", Color.blue);
+					clientGUI.println(nickname + " has received the file \""
+							+ client.getFilenameWithNickname(nickname) + "\".", Color.blue);
 					client.forgetFileTransfer(nickname);
 					break;
 				default:
-					System.err.println("Unknown opcode: " + opcode);
 					clientGUI.println("Private connection lost with " + nickname, Color.red);
+					LOGGER.warning("Unknown opcode: " + opcode + " received from " + nickname);
 					client.forgetPrivateConnection(nickname);
 					return;
 				}
 			} catch (IOException ioe) {
 				if (!Thread.interrupted()) {
 					clientGUI.println("Private connection lost with " + nickname, Color.red);
+					LOGGER.warning("Private connection lost with " + nickname);
 				} else {
-					clientGUI.println("Private connection closed with " + nickname, Color.blue);
+					LOGGER.info("Private connection closed with " + nickname);
 				}
 				client.forgetPrivateConnection(nickname);
 				return;
 			}
+		}
+	}
+
+	@Override
+	public void run() {
+		if (isMessageThread) {
+			runMessage();
+		} else {
+			runFile();
 		}
 	}
 }
